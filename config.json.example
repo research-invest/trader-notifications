@@ -1,0 +1,10 @@
+{
+  "telegram-bot": "5230231851:AAGC_4HWwUq7rLedf3bIWVn82Sa_rVkJyLE",
+  "db": {
+    "host": "localhost",
+    "port": 5436,
+    "user": "dbuser",
+    "pass": "HCK6LrwUsVu63ZdF",
+    "dbname": "trader_db"
+  }
+}
