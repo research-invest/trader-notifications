@@ -3,12 +3,14 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/go-pg/pg/v10"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
 	"github.com/sirupsen/logrus"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -73,36 +75,54 @@ func telegramBot() {
 			continue
 		}
 
-		if !update.Message.IsCommand() { // ignore any non-command Messages
-			continue
-		}
-
 		sub := Subscriber{}
 		_, err := sub.addNew(update.Message.Chat) //subscriber
 
 		if err != nil {
 			fmt.Printf("can't add a new file db record : %v\n", err)
 			log.Warnf("can't subscriber create : %v", err)
+			continue
 		}
-
-		//report - Report
-		//status - Status
 
 		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "")
 
-		// Extract the command from the Message.
-		switch update.Message.Command() {
-		case "report":
-			msg.Text = "report"
-		case "status":
-			msg.Text = "I'm ok."
-		default:
-			msg.Text = "I don't know that command"
+		if update.Message.IsCommand() { // ignore any non-command Messages
+
+			//report - Report
+			//status - Status
+
+			// Extract the command from the Message.
+			switch update.Message.Command() {
+			case "report":
+				msg.Text = "report"
+			case "status":
+				msg.Text = "I'm ok."
+			default:
+				msg.Text = "I don't know that command"
+			}
+
+			if _, err := bot.Send(msg); err != nil {
+				log.Panic(err)
+			}
+
+			continue
 		}
 
-		if _, err := bot.Send(msg); err != nil {
-			log.Panic(err)
+		rate, err := getActualExchangeRate(update.Message.Text)
+
+		if err == nil {
+			s, _ := json.MarshalIndent(rate, "", "\t")
+			msg.Text = string(s)
+			if _, err := bot.Send(msg); err != nil {
+				log.Warnf("can't send bot message getActualExchangeRate: %v", err)
+			}
+		} else {
+			msg.Text = err.Error()
+			if _, err := bot.Send(msg); err != nil {
+				log.Warnf("can't send bot message getActualExchangeRate: %v", err)
+			}
 		}
+
 	}
 }
 
@@ -270,4 +290,120 @@ func sendNotifications() {
 	}
 
 	sendNotificationsIsWorking = false
+}
+
+func getActualExchangeRate(message string) (PercentCoin, error) {
+	message = strings.ToUpper(strings.TrimSpace(message))
+
+	var rate PercentCoin
+
+	if !strings.Contains(message, "?") {
+		return rate, errors.New("no correct coin")
+	}
+
+	coin := strings.Replace(message, "?", "", 100)
+
+	if len(coin) >= 10 {
+		return rate, errors.New("no correct coin")
+	}
+
+	res, err := dbConnect.Query(&rate, `
+	
+WITH coin_pairs_24_hours AS (
+    SELECT k.coin_pair_id,
+           c.id as coin_id,
+           c.code,
+           k.open,
+           k.close,
+           k.close_time,
+           c.rank
+    FROM klines AS k
+             INNER JOIN coins_pairs AS cp ON cp.id = k.coin_pair_id
+             INNER JOIN coins AS c ON c.id = cp.coin_id
+    WHERE cp.couple = 'BUSD'
+      AND c.is_enabled = 1
+      AND cp.is_enabled = 1
+      AND k.close_time >= NOW() - INTERVAL '1 DAY'
+    AND c.name = ?
+    ORDER BY c.rank
+)
+
+SELECT DISTINCT ON (t.coin_id) t.coin_id,
+                               t.code,
+                               minute10.percent AS minute10,
+                               hour.percent     AS hour,
+                               hour4.percent    AS hour4,
+                               hour12.percent   AS hour12,
+                               hour24.percent   AS hour24,
+                               hour.min_value   AS hour_min_value,
+                               hour.max_value   AS hour_max_value,
+                               hour4.min_value  AS hour4_min_value,
+                               hour4.max_value  AS hour4_max_value,
+                               hour12.min_value AS hour12_min_value,
+                               hour12.max_value AS hour12_max_value,
+                               hour24.min_value AS hour24_min_value,
+                               hour24.max_value AS hour24_max_value
+FROM coin_pairs_24_hours AS t
+         LEFT JOIN (
+    SELECT t.coin_pair_id,
+           MAX(t.close)                                                                   AS max_value,
+           MIN(t.open)                                                                    AS min_value,
+           ROUND(CAST(((MAX(t.close) - MIN(t.open)) / MAX(t.close)) * 100 AS NUMERIC), 3) AS percent
+    FROM coin_pairs_24_hours AS t
+    WHERE t.close_time >= NOW() - INTERVAL '10 MINUTE'
+    GROUP BY t.coin_pair_id
+) as minute10 ON t.coin_pair_id = minute10.coin_pair_id
+         LEFT JOIN (
+    SELECT t.coin_pair_id,
+           MAX(t.close)                                                                   AS max_value,
+           MIN(t.open)                                                                    AS min_value,
+           ROUND(CAST(((MAX(t.close) - MIN(t.open)) / MAX(t.close)) * 100 AS NUMERIC), 3) AS percent
+    FROM coin_pairs_24_hours AS t
+    WHERE t.close_time >= NOW() - INTERVAL '1 HOUR'
+    GROUP BY t.coin_pair_id
+) as hour ON t.coin_pair_id = hour.coin_pair_id
+         LEFT JOIN (
+    SELECT t.coin_pair_id,
+           MAX(t.close)                                                                   AS max_value,
+           MIN(t.open)                                                                    AS min_value,
+           ROUND(CAST(((MAX(t.close) - MIN(t.open)) / MAX(t.close)) * 100 AS NUMERIC), 3) AS percent
+    FROM coin_pairs_24_hours AS t
+    WHERE t.close_time >= NOW() - INTERVAL '4 HOUR'
+    GROUP BY t.coin_pair_id
+) as hour4 ON t.coin_pair_id = hour4.coin_pair_id
+         LEFT JOIN (
+    SELECT t.coin_pair_id,
+           MAX(t.close)                                                                   AS max_value,
+           MIN(t.open)                                                                    AS min_value,
+           ROUND(CAST(((MAX(t.close) - MIN(t.open)) / MAX(t.close)) * 100 AS NUMERIC), 3) AS percent
+    FROM coin_pairs_24_hours AS t
+    WHERE t.close_time >= NOW() - INTERVAL '12 HOUR'
+    GROUP BY t.coin_pair_id
+) as hour12 ON t.coin_pair_id = hour12.coin_pair_id
+         LEFT JOIN (
+    SELECT t.coin_pair_id,
+           MAX(t.close)                                                                   AS max_value,
+           MIN(t.open)                                                                    AS min_value,
+           ROUND(CAST(((MAX(t.close) - MIN(t.open)) / MAX(t.close)) * 100 AS NUMERIC), 3) AS percent
+    FROM coin_pairs_24_hours AS t
+    WHERE t.close_time >= NOW() - INTERVAL '1 DAY'
+    GROUP BY t.coin_pair_id
+) AS hour24 ON t.coin_pair_id = hour24.coin_pair_id
+WHERE (hour.percent >= 2 OR hour.percent <= -2)
+   OR (hour4.percent >= 2 OR hour4.percent <= -2)
+   OR (hour12.percent >= 2 OR hour12.percent <= -2)
+   OR (hour24.percent >= 2 OR hour24.percent <= -2)
+LIMIT 1;
+`, coin)
+
+	if err != nil {
+		log.Panic("can't get get actual exchange rate: %v", err)
+		return rate, err
+	}
+
+	if res.RowsAffected() == 0 {
+		return rate, errors.New("coin not found")
+	}
+
+	return rate, nil
 }
