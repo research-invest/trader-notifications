@@ -226,7 +226,7 @@ WHERE ((hour.percent >= 2 OR hour.percent <= -2)
    OR (hour12.percent >= 2 OR hour12.percent <= -2)
    OR (hour24.percent >= 2 OR hour24.percent <= -2))
 AND t.rank <= 100
-ORDER BY t.coin_id, t.rank
+ORDER BY t.coin_id, t.rank DESC
 LIMIT 10;
 `)
 
