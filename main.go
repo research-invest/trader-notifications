@@ -221,10 +221,11 @@ FROM coin_pairs_24_hours AS t
     WHERE t.open_time >= NOW() - INTERVAL '1 DAY' AND t.close_time <= NOW()
     GROUP BY t.coin_pair_id
 ) AS hour24 ON t.coin_pair_id = hour24.coin_pair_id
-WHERE (hour.percent >= 2 OR hour.percent <= -2)
+WHERE ((hour.percent >= 2 OR hour.percent <= -2)
    OR (hour4.percent >= 2 OR hour4.percent <= -2)
    OR (hour12.percent >= 2 OR hour12.percent <= -2)
-   OR (hour24.percent >= 2 OR hour24.percent <= -2)
+   OR (hour24.percent >= 2 OR hour24.percent <= -2))
+AND t.rank <= 100
 ORDER BY t.coin_id, t.rank
 LIMIT 10;
 `)
