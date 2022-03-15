@@ -67,6 +67,7 @@ type NotificationsLogs struct {
 
 type PercentCoin struct {
 	CoinId           int64
+	Rank             int
 	Code             string
 	Minute10         float64
 	Hour             float64
@@ -83,4 +84,15 @@ type PercentCoin struct {
 	Hour12MaxClose   float64
 	Hour24AvgOpen    float64
 	Hour24MaxClose   float64
+}
+
+type PercentCoinShort struct {
+	CoinId   int64
+	Rank     int
+	Code     string
+	Minute10 float64
+	Hour     float64
+	Hour4    float64
+	Hour12   float64
+	Hour24   float64
 }

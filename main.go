@@ -143,7 +143,7 @@ func dbInit() {
 	}
 }
 
-func getPercentCoins(coins *[]PercentCoin) (err error) {
+func getPercentCoins(coins *[]PercentCoinShort) (err error) {
 	_, err = dbConnect.Query(coins, `
 
 WITH coin_pairs_24_hours AS (
@@ -160,21 +160,22 @@ WITH coin_pairs_24_hours AS (
 
 SELECT DISTINCT ON (t.coin_id) t.coin_id,
                                t.code,
+                               t.rank,
                                minute10.percent AS minute10,
                                hour.percent     AS hour,
                                hour4.percent    AS hour4,
                                hour12.percent   AS hour12,
-                               hour24.percent   AS hour24,
-                               minute10.avg_open   AS minute10_avg_open,
-                               minute10.max_close   AS minute10_max_close,
-                               hour.avg_open   AS hour_avg_open,
-                               hour.max_close   AS hour_max_close,
-                               hour4.avg_open   AS hour4_avg_open,
-                               hour4.max_close   AS hour4_max_close,
-                               hour12.avg_open   AS hour12_avg_open,
-                               hour12.max_close   AS hour12_max_close,
-                               hour24.avg_open   AS hour24_avg_open,
-                               hour24.max_close   AS hour24_max_close
+                               hour24.percent   AS hour24 --,
+                               --minute10.avg_open   AS minute10_avg_open,
+                               --minute10.max_close   AS minute10_max_close,
+                               --hour.avg_open   AS hour_avg_open,
+                               --hour.max_close   AS hour_max_close,
+                               --hour4.avg_open   AS hour4_avg_open,
+                               --hour4.max_close   AS hour4_max_close,
+                               --hour12.avg_open   AS hour12_avg_open,
+                               --hour12.max_close   AS hour12_max_close,
+                               --hour24.avg_open   AS hour24_avg_open,
+                               --hour24.max_close   AS hour24_max_close
 FROM coin_pairs_24_hours AS t
          LEFT JOIN (
     SELECT t.coin_pair_id,
@@ -225,9 +226,9 @@ WHERE ((hour.percent >= 2 OR hour.percent <= -2)
    OR (hour4.percent >= 2 OR hour4.percent <= -2)
    OR (hour12.percent >= 2 OR hour12.percent <= -2)
    OR (hour24.percent >= 2 OR hour24.percent <= -2))
-AND t.rank <= 100
+AND t.rank <= 150
 ORDER BY t.coin_id, t.rank DESC
-LIMIT 10;
+LIMIT 20;
 `)
 
 	if err != nil {
@@ -243,7 +244,7 @@ func sendNotifications() {
 		return
 	}
 
-	var coins []PercentCoin
+	var coins []PercentCoinShort
 	err := getPercentCoins(&coins)
 
 	if err != nil {
@@ -320,6 +321,7 @@ WITH coin_pairs_24_hours AS (
 
 SELECT DISTINCT ON (t.coin_id) t.coin_id,
                                t.code,
+                               t.rank,
                                minute10.percent AS minute10,
                                hour.percent     AS hour,
                                hour4.percent    AS hour4,
