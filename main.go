@@ -239,13 +239,14 @@ FROM (
                AND t.close_time <= NOW()
              GROUP BY t.coin_pair_id
          ) AS hour24 ON t.coin_pair_id = hour24.coin_pair_id
-         WHERE ((hour.percent >= 2 OR hour.percent <= -2)
+         WHERE (
+			(minute10.percent >= 2 OR minute10.percent <= -2)
+			 OR (hour.percent >= 3 OR hour.percent <= -3)
              OR (hour4.percent >= 4 OR hour4.percent <= -4)
-             OR (hour12.percent >= 6 OR hour12.percent <= -6)
+             OR (hour12.percent >= 8 OR hour12.percent <= -8)
              OR (hour24.percent >= 10 OR hour24.percent <= -10))
-           --AND t.rank <= 150
          ORDER BY t.coin_id
-         LIMIT 20
+         LIMIT 30
      ) AS t
 ORDER BY t.rank ASC;
 `)
