@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/go-pg/pg/v10"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
+	"github.com/olekukonko/tablewriter"
 	"github.com/sirupsen/logrus"
 	"os"
 	"strconv"
@@ -147,7 +148,16 @@ func getPercentCoins(coins *[]PercentCoinShort) (err error) {
 	_, err = dbConnect.Query(coins, `
 
 WITH coin_pairs_24_hours AS (
-    SELECT k.coin_pair_id, c.id as coin_id, c.code, k.open, k.close, k.high, k.low, k.close_time, k.open_time, c.rank
+    SELECT k.coin_pair_id,
+           c.id as coin_id,
+           c.code,
+           k.open,
+           k.close,
+           k.high,
+           k.low,
+           k.close_time,
+           k.open_time,
+           c.rank
     FROM klines AS k
              INNER JOIN coins_pairs AS cp ON cp.id = k.coin_pair_id
              INNER JOIN coins AS c ON c.id = cp.coin_id
@@ -158,77 +168,86 @@ WITH coin_pairs_24_hours AS (
     ORDER BY c.rank
 )
 
-SELECT DISTINCT ON (t.coin_id) t.coin_id,
-                               t.code,
-                               t.rank,
-                               minute10.percent AS minute10,
-                               hour.percent     AS hour,
-                               hour4.percent    AS hour4,
-                               hour12.percent   AS hour12,
-                               hour24.percent   AS hour24 --,
-                               --minute10.avg_open   AS minute10_avg_open,
-                               --minute10.max_close   AS minute10_max_close,
-                               --hour.avg_open   AS hour_avg_open,
-                               --hour.max_close   AS hour_max_close,
-                               --hour4.avg_open   AS hour4_avg_open,
-                               --hour4.max_close   AS hour4_max_close,
-                               --hour12.avg_open   AS hour12_avg_open,
-                               --hour12.max_close   AS hour12_max_close,
-                               --hour24.avg_open   AS hour24_avg_open,
-                               --hour24.max_close   AS hour24_max_close
-FROM coin_pairs_24_hours AS t
-         LEFT JOIN (
-    SELECT t.coin_pair_id,
-           AVG(t.open) AS avg_open,
-           MAX(t.close) AS max_close,
-           CAlC_PERCENT(AVG(t.open), MAX(t.close)) AS percent
-    FROM coin_pairs_24_hours AS t
-    WHERE t.open_time >= NOW() - INTERVAL '10 MINUTE' AND t.close_time <= NOW()
-    GROUP BY t.coin_pair_id
-) as minute10 ON t.coin_pair_id = minute10.coin_pair_id
-         LEFT JOIN (
-    SELECT t.coin_pair_id,
-           AVG(t.open) AS avg_open,
-           MAX(t.close) AS max_close,
-           CAlC_PERCENT(AVG(t.open), MAX(t.close)) AS percent
-    FROM coin_pairs_24_hours AS t
-    WHERE t.open_time >= NOW() - INTERVAL '1 HOUR' AND t.close_time <= NOW()
-    GROUP BY t.coin_pair_id
-) as hour ON t.coin_pair_id = hour.coin_pair_id
-         LEFT JOIN (
-    SELECT t.coin_pair_id,
-           AVG(t.open) AS avg_open,
-           MAX(t.close) AS max_close,
-           CAlC_PERCENT(AVG(t.open), MAX(t.close)) AS percent
-    FROM coin_pairs_24_hours AS t
-    WHERE t.open_time >= NOW() - INTERVAL '4 HOUR' AND t.close_time <= NOW()
-    GROUP BY t.coin_pair_id
-) as hour4 ON t.coin_pair_id = hour4.coin_pair_id
-         LEFT JOIN (
-    SELECT t.coin_pair_id,
-           AVG(t.open) AS avg_open,
-           MAX(t.close) AS max_close,
-           CAlC_PERCENT(AVG(t.open), MAX(t.close)) AS percent
-    FROM coin_pairs_24_hours AS t
-    WHERE t.open_time >= NOW() - INTERVAL '12 HOUR' AND t.close_time <= NOW()
-    GROUP BY t.coin_pair_id
-) as hour12 ON t.coin_pair_id = hour12.coin_pair_id
-         LEFT JOIN (
-    SELECT t.coin_pair_id,
-           AVG(t.open) AS avg_open,
-           MAX(t.close) AS max_close,
-           CAlC_PERCENT(AVG(t.open), MAX(t.close)) AS percent
-    FROM coin_pairs_24_hours AS t
-    WHERE t.open_time >= NOW() - INTERVAL '1 DAY' AND t.close_time <= NOW()
-    GROUP BY t.coin_pair_id
-) AS hour24 ON t.coin_pair_id = hour24.coin_pair_id
-WHERE ((hour.percent >= 2 OR hour.percent <= -2)
-   OR (hour4.percent >= 2 OR hour4.percent <= -2)
-   OR (hour12.percent >= 2 OR hour12.percent <= -2)
-   OR (hour24.percent >= 2 OR hour24.percent <= -2))
-AND t.rank <= 150
-ORDER BY t.coin_id, t.rank DESC
-LIMIT 20;
+SELECT t.*
+FROM (
+         SELECT DISTINCT ON (t.coin_id) t.coin_id,
+                                        t.code,
+                                        t.rank,
+                                        minute10.percent AS minute10,
+                                        hour.percent     AS hour,
+                                        hour4.percent    AS hour4,
+                                        hour12.percent   AS hour12,
+                                        hour24.percent   AS hour24 --,
+                                        --minute10.avg_open   AS minute10_avg_open,
+                                        --minute10.max_close   AS minute10_max_close,
+                                        --hour.avg_open   AS hour_avg_open,
+                                        --hour.max_close   AS hour_max_close,
+                                        --hour4.avg_open   AS hour4_avg_open,
+                                        --hour4.max_close   AS hour4_max_close,
+                                        --hour12.avg_open   AS hour12_avg_open,
+                                        --hour12.max_close   AS hour12_max_close,
+                                        --hour24.avg_open   AS hour24_avg_open,
+                                        --hour24.max_close   AS hour24_max_close
+         FROM coin_pairs_24_hours AS t
+                  LEFT JOIN (
+             SELECT t.coin_pair_id,
+                    AVG(t.open)                             AS avg_open,
+                    MAX(t.close)                            AS max_close,
+                    CAlC_PERCENT(AVG(t.open), MAX(t.close)) AS percent
+             FROM coin_pairs_24_hours AS t
+             WHERE t.open_time >= NOW() - INTERVAL '10 MINUTE'
+               AND t.close_time <= NOW()
+             GROUP BY t.coin_pair_id
+         ) as minute10 ON t.coin_pair_id = minute10.coin_pair_id
+                  LEFT JOIN (
+             SELECT t.coin_pair_id,
+                    AVG(t.open)                             AS avg_open,
+                    MAX(t.close)                            AS max_close,
+                    CAlC_PERCENT(AVG(t.open), MAX(t.close)) AS percent
+             FROM coin_pairs_24_hours AS t
+             WHERE t.open_time >= NOW() - INTERVAL '1 HOUR'
+               AND t.close_time <= NOW()
+             GROUP BY t.coin_pair_id
+         ) as hour ON t.coin_pair_id = hour.coin_pair_id
+                  LEFT JOIN (
+             SELECT t.coin_pair_id,
+                    AVG(t.open)                             AS avg_open,
+                    MAX(t.close)                            AS max_close,
+                    CAlC_PERCENT(AVG(t.open), MAX(t.close)) AS percent
+             FROM coin_pairs_24_hours AS t
+             WHERE t.open_time >= NOW() - INTERVAL '4 HOUR'
+               AND t.close_time <= NOW()
+             GROUP BY t.coin_pair_id
+         ) as hour4 ON t.coin_pair_id = hour4.coin_pair_id
+                  LEFT JOIN (
+             SELECT t.coin_pair_id,
+                    AVG(t.open)                             AS avg_open,
+                    MAX(t.close)                            AS max_close,
+                    CAlC_PERCENT(AVG(t.open), MAX(t.close)) AS percent
+             FROM coin_pairs_24_hours AS t
+             WHERE t.open_time >= NOW() - INTERVAL '12 HOUR'
+               AND t.close_time <= NOW()
+             GROUP BY t.coin_pair_id
+         ) as hour12 ON t.coin_pair_id = hour12.coin_pair_id
+                  LEFT JOIN (
+             SELECT t.coin_pair_id,
+                    AVG(t.open)                             AS avg_open,
+                    MAX(t.close)                            AS max_close,
+                    CAlC_PERCENT(AVG(t.open), MAX(t.close)) AS percent
+             FROM coin_pairs_24_hours AS t
+             WHERE t.open_time >= NOW() - INTERVAL '1 DAY'
+               AND t.close_time <= NOW()
+             GROUP BY t.coin_pair_id
+         ) AS hour24 ON t.coin_pair_id = hour24.coin_pair_id
+         WHERE ((hour.percent >= 2 OR hour.percent <= -2)
+             OR (hour4.percent >= 4 OR hour4.percent <= -4)
+             OR (hour12.percent >= 6 OR hour12.percent <= -6)
+             OR (hour24.percent >= 10 OR hour24.percent <= -10))
+           --AND t.rank <= 150
+         ORDER BY t.coin_id
+         LIMIT 20
+     ) AS t
+ORDER BY t.rank ASC;
 `)
 
 	if err != nil {
@@ -278,10 +297,26 @@ func sendNotifications() {
 
 	bot.Debug = false //!!!!
 
-	for _, subscriber := range subscribers {
-		s, _ := json.MarshalIndent(coins, "", "\t")
+	tableString := &strings.Builder{}
+	table := tablewriter.NewWriter(tableString)
+	table.SetHeader([]string{"Name", "Rank", "10m", "1h", "4h", "12h", "24h"})
 
-		msg := tgbotapi.NewMessage(subscriber.TelegramId, string(s))
+	for _, coin := range coins {
+		table.Append([]string{
+			coin.Code,
+			IntToStr(coin.Rank),
+			FloatToStr(coin.Minute10),
+			FloatToStr(coin.Hour),
+			FloatToStr(coin.Hour4),
+			FloatToStr(coin.Hour12),
+			FloatToStr(coin.Hour24),
+		})
+	}
+
+	table.Render()
+
+	for _, subscriber := range subscribers {
+		msg := tgbotapi.NewMessage(subscriber.TelegramId, tableString.String())
 		if _, err := bot.Send(msg); err != nil {
 			log.Panic(err)
 		}
