@@ -191,9 +191,9 @@ FROM (
          FROM coin_pairs_24_hours AS t
                   LEFT JOIN (
              SELECT t.coin_pair_id,
-                    AVG(t.open)                             AS avg_open,
+                    MIN(t.open)                             AS avg_open,
                     MAX(t.close)                            AS max_close,
-                    CAlC_PERCENT(AVG(t.open), MAX(t.close)) AS percent
+                    CAlC_PERCENT(MIN(t.open), MAX(t.close)) AS percent
              FROM coin_pairs_24_hours AS t
              WHERE t.open_time >= NOW() - INTERVAL '10 MINUTE'
                AND t.close_time <= NOW()
@@ -201,9 +201,9 @@ FROM (
          ) as minute10 ON t.coin_pair_id = minute10.coin_pair_id
                   LEFT JOIN (
              SELECT t.coin_pair_id,
-                    AVG(t.open)                             AS avg_open,
+                    MIN(t.open)                             AS avg_open,
                     MAX(t.close)                            AS max_close,
-                    CAlC_PERCENT(AVG(t.open), MAX(t.close)) AS percent
+                    CAlC_PERCENT(MIN(t.open), MAX(t.close)) AS percent
              FROM coin_pairs_24_hours AS t
              WHERE t.open_time >= NOW() - INTERVAL '1 HOUR'
                AND t.close_time <= NOW()
@@ -211,9 +211,9 @@ FROM (
          ) as hour ON t.coin_pair_id = hour.coin_pair_id
                   LEFT JOIN (
              SELECT t.coin_pair_id,
-                    AVG(t.open)                             AS avg_open,
+                    MIN(t.open)                             AS avg_open,
                     MAX(t.close)                            AS max_close,
-                    CAlC_PERCENT(AVG(t.open), MAX(t.close)) AS percent
+                    CAlC_PERCENT(MIN(t.open), MAX(t.close)) AS percent
              FROM coin_pairs_24_hours AS t
              WHERE t.open_time >= NOW() - INTERVAL '4 HOUR'
                AND t.close_time <= NOW()
@@ -221,9 +221,9 @@ FROM (
          ) as hour4 ON t.coin_pair_id = hour4.coin_pair_id
                   LEFT JOIN (
              SELECT t.coin_pair_id,
-                    AVG(t.open)                             AS avg_open,
+                    MIN(t.open)                             AS avg_open,
                     MAX(t.close)                            AS max_close,
-                    CAlC_PERCENT(AVG(t.open), MAX(t.close)) AS percent
+                    CAlC_PERCENT(MIN(t.open), MAX(t.close)) AS percent
              FROM coin_pairs_24_hours AS t
              WHERE t.open_time >= NOW() - INTERVAL '12 HOUR'
                AND t.close_time <= NOW()
@@ -231,9 +231,9 @@ FROM (
          ) as hour12 ON t.coin_pair_id = hour12.coin_pair_id
                   LEFT JOIN (
              SELECT t.coin_pair_id,
-                    AVG(t.open)                             AS avg_open,
+                    MIN(t.open)                             AS avg_open,
                     MAX(t.close)                            AS max_close,
-                    CAlC_PERCENT(AVG(t.open), MAX(t.close)) AS percent
+                    CAlC_PERCENT(MIN(t.open), MAX(t.close)) AS percent
              FROM coin_pairs_24_hours AS t
              WHERE t.open_time >= NOW() - INTERVAL '1 DAY'
                AND t.close_time <= NOW()
@@ -376,45 +376,45 @@ SELECT DISTINCT ON (t.coin_id) t.coin_id,
 FROM coin_pairs_24_hours AS t
          LEFT JOIN (
     SELECT t.coin_pair_id,
-           AVG(t.open) AS avg_open,
+           MIN(t.open) AS avg_open,
            MAX(t.close) AS max_close,
-           CAlC_PERCENT(AVG(t.open), MAX(t.close)) AS percent
+           CAlC_PERCENT(MIN(t.open), MAX(t.close)) AS percent
     FROM coin_pairs_24_hours AS t
     WHERE t.open_time >= NOW() - INTERVAL '10 MINUTE' AND t.close_time <= NOW()
     GROUP BY t.coin_pair_id
 ) as minute10 ON t.coin_pair_id = minute10.coin_pair_id
          LEFT JOIN (
     SELECT t.coin_pair_id,
-           AVG(t.open) AS avg_open,
+           MIN(t.open) AS avg_open,
            MAX(t.close) AS max_close,
-           CAlC_PERCENT(AVG(t.open), MAX(t.close)) AS percent
+           CAlC_PERCENT(MIN(t.open), MAX(t.close)) AS percent
     FROM coin_pairs_24_hours AS t
     WHERE t.open_time >= NOW() - INTERVAL '1 HOUR' AND t.close_time <= NOW()
     GROUP BY t.coin_pair_id
 ) as hour ON t.coin_pair_id = hour.coin_pair_id
          LEFT JOIN (
     SELECT t.coin_pair_id,
-           AVG(t.open) AS avg_open,
+           MIN(t.open) AS avg_open,
            MAX(t.close) AS max_close,
-           CAlC_PERCENT(AVG(t.open), MAX(t.close)) AS percent
+           CAlC_PERCENT(MIN(t.open), MAX(t.close)) AS percent
     FROM coin_pairs_24_hours AS t
     WHERE t.open_time >= NOW() - INTERVAL '4 HOUR' AND t.close_time <= NOW()
     GROUP BY t.coin_pair_id
 ) as hour4 ON t.coin_pair_id = hour4.coin_pair_id
          LEFT JOIN (
     SELECT t.coin_pair_id,
-           AVG(t.open) AS avg_open,
+           MIN(t.open) AS avg_open,
            MAX(t.close) AS max_close,
-           CAlC_PERCENT(AVG(t.open), MAX(t.close)) AS percent
+           CAlC_PERCENT(MIN(t.open), MAX(t.close)) AS percent
     FROM coin_pairs_24_hours AS t
     WHERE t.open_time >= NOW() - INTERVAL '12 HOUR' AND t.close_time <= NOW()
     GROUP BY t.coin_pair_id
 ) as hour12 ON t.coin_pair_id = hour12.coin_pair_id
          LEFT JOIN (
     SELECT t.coin_pair_id,
-           AVG(t.open) AS avg_open,
+           MIN(t.open) AS avg_open,
            MAX(t.close) AS max_close,
-           CAlC_PERCENT(AVG(t.open), MAX(t.close)) AS percent
+           CAlC_PERCENT(MIN(t.open), MAX(t.close)) AS percent
     FROM coin_pairs_24_hours AS t
     WHERE t.open_time >= NOW() - INTERVAL '1 DAY' AND t.close_time <= NOW()
     GROUP BY t.coin_pair_id
