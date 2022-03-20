@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/go-pg/pg/v10"
@@ -39,8 +38,19 @@ func main() {
 		telegramBot()
 	}()
 
+	sendNotifications() // mutex если в данный момент еще в работе
+
 	for {
-		sendNotifications() // mutex если в данный момент еще в работе
+		t := time.Now()
+
+		if t.Hour() >= 2 && t.Hour() < 7 {
+			time.Sleep(1 * time.Hour) // temp
+		}
+
+		if t.Second() == 0 {
+			sendNotifications() // mutex если в данный момент еще в работе
+		}
+
 		time.Sleep(10 * time.Minute)
 	}
 }
@@ -112,8 +122,7 @@ func telegramBot() {
 		rate, err := getActualExchangeRate(update.Message.Text)
 
 		if err == nil {
-			s, _ := json.MarshalIndent(rate, "", "\t")
-			msg.Text = string(s)
+			msg.Text = rate
 			if _, err := bot.Send(msg); err != nil {
 				log.Warnf("can't send bot message getActualExchangeRate: %v", err)
 			}
@@ -178,30 +187,30 @@ FROM (
                                         hour4.percent    AS hour4,
                                         hour12.percent   AS hour12,
                                         hour24.percent   AS hour24 --,
-                                        --minute10.avg_open   AS minute10_avg_open,
+                                        --minute10.min_open   AS minute10_min_open,
                                         --minute10.max_close   AS minute10_max_close,
-                                        --hour.avg_open   AS hour_avg_open,
+                                        --hour.min_open   AS hour_min_open,
                                         --hour.max_close   AS hour_max_close,
-                                        --hour4.avg_open   AS hour4_avg_open,
+                                        --hour4.min_open   AS hour4_min_open,
                                         --hour4.max_close   AS hour4_max_close,
-                                        --hour12.avg_open   AS hour12_avg_open,
+                                        --hour12.min_open   AS hour12_min_open,
                                         --hour12.max_close   AS hour12_max_close,
-                                        --hour24.avg_open   AS hour24_avg_open,
+                                        --hour24.min_open   AS hour24_min_open,
                                         --hour24.max_close   AS hour24_max_close
          FROM coin_pairs_24_hours AS t
                   LEFT JOIN (
              SELECT t.coin_pair_id,
-                    MIN(t.open)                             AS avg_open,
+                    MIN(t.open)                             AS min_open,
                     MAX(t.close)                            AS max_close,
                     CAlC_PERCENT(MIN(t.open), MAX(t.close)) AS percent
              FROM coin_pairs_24_hours AS t
-             WHERE t.open_time >= NOW() - INTERVAL '10 MINUTE'
-               AND t.close_time <= NOW()
+             WHERE t.open_time <= NOW() - INTERVAL '10 MINUTE'
+               AND t.close_time >= NOW()
              GROUP BY t.coin_pair_id
          ) as minute10 ON t.coin_pair_id = minute10.coin_pair_id
                   LEFT JOIN (
              SELECT t.coin_pair_id,
-                    MIN(t.open)                             AS avg_open,
+                    MIN(t.open)                             AS min_open,
                     MAX(t.close)                            AS max_close,
                     CAlC_PERCENT(MIN(t.open), MAX(t.close)) AS percent
              FROM coin_pairs_24_hours AS t
@@ -211,7 +220,7 @@ FROM (
          ) as hour ON t.coin_pair_id = hour.coin_pair_id
                   LEFT JOIN (
              SELECT t.coin_pair_id,
-                    MIN(t.open)                             AS avg_open,
+                    MIN(t.open)                             AS min_open,
                     MAX(t.close)                            AS max_close,
                     CAlC_PERCENT(MIN(t.open), MAX(t.close)) AS percent
              FROM coin_pairs_24_hours AS t
@@ -221,7 +230,7 @@ FROM (
          ) as hour4 ON t.coin_pair_id = hour4.coin_pair_id
                   LEFT JOIN (
              SELECT t.coin_pair_id,
-                    MIN(t.open)                             AS avg_open,
+                    MIN(t.open)                             AS min_open,
                     MAX(t.close)                            AS max_close,
                     CAlC_PERCENT(MIN(t.open), MAX(t.close)) AS percent
              FROM coin_pairs_24_hours AS t
@@ -231,7 +240,7 @@ FROM (
          ) as hour12 ON t.coin_pair_id = hour12.coin_pair_id
                   LEFT JOIN (
              SELECT t.coin_pair_id,
-                    MIN(t.open)                             AS avg_open,
+                    MIN(t.open)                             AS min_open,
                     MAX(t.close)                            AS max_close,
                     CAlC_PERCENT(MIN(t.open), MAX(t.close)) AS percent
              FROM coin_pairs_24_hours AS t
@@ -246,7 +255,7 @@ FROM (
              OR (hour12.percent >= 8 OR hour12.percent <= -8)
              OR (hour24.percent >= 10 OR hour24.percent <= -10))
          ORDER BY t.coin_id
-         LIMIT 30
+         LIMIT 45
      ) AS t
 ORDER BY t.rank ASC;
 `)
@@ -263,6 +272,8 @@ func sendNotifications() {
 	if sendNotificationsIsWorking == true {
 		return
 	}
+
+	fmt.Println("Send notifications start work")
 
 	var coins []PercentCoinShort
 	err := getPercentCoins(&coins)
@@ -326,19 +337,19 @@ func sendNotifications() {
 	sendNotificationsIsWorking = false
 }
 
-func getActualExchangeRate(message string) (PercentCoin, error) {
+func getActualExchangeRate(message string) (string, error) {
 	message = strings.ToUpper(strings.TrimSpace(message))
 
 	var rate PercentCoin
 
 	if !strings.Contains(message, "?") {
-		return rate, errors.New("no correct coin")
+		return "", errors.New("no correct coin")
 	}
 
 	coin := strings.Replace(message, "?", "", 100)
 
 	if len(coin) >= 10 {
-		return rate, errors.New("no correct coin")
+		return "", errors.New("no correct coin")
 	}
 
 	res, err := dbConnect.Query(&rate, `
@@ -363,20 +374,20 @@ SELECT DISTINCT ON (t.coin_id) t.coin_id,
                                hour4.percent    AS hour4,
                                hour12.percent   AS hour12,
                                hour24.percent   AS hour24,
-                               minute10.avg_open   AS minute10_avg_open,
+                               minute10.min_open   AS minute10_min_open,
                                minute10.max_close   AS minute10_max_close,
-                               hour.avg_open   AS hour_avg_open,
+                               hour.min_open   AS hour_min_open,
                                hour.max_close   AS hour_max_close,
-                               hour4.avg_open   AS hour4_avg_open,
+                               hour4.min_open   AS hour4_min_open,
                                hour4.max_close   AS hour4_max_close,
-                               hour12.avg_open   AS hour12_avg_open,
+                               hour12.min_open   AS hour12_min_open,
                                hour12.max_close   AS hour12_max_close,
-                               hour24.avg_open   AS hour24_avg_open,
+                               hour24.min_open   AS hour24_min_open,
                                hour24.max_close   AS hour24_max_close
 FROM coin_pairs_24_hours AS t
          LEFT JOIN (
     SELECT t.coin_pair_id,
-           MIN(t.open) AS avg_open,
+           MIN(t.open) AS min_open,
            MAX(t.close) AS max_close,
            CAlC_PERCENT(MIN(t.open), MAX(t.close)) AS percent
     FROM coin_pairs_24_hours AS t
@@ -385,7 +396,7 @@ FROM coin_pairs_24_hours AS t
 ) as minute10 ON t.coin_pair_id = minute10.coin_pair_id
          LEFT JOIN (
     SELECT t.coin_pair_id,
-           MIN(t.open) AS avg_open,
+           MIN(t.open) AS min_open,
            MAX(t.close) AS max_close,
            CAlC_PERCENT(MIN(t.open), MAX(t.close)) AS percent
     FROM coin_pairs_24_hours AS t
@@ -394,7 +405,7 @@ FROM coin_pairs_24_hours AS t
 ) as hour ON t.coin_pair_id = hour.coin_pair_id
          LEFT JOIN (
     SELECT t.coin_pair_id,
-           MIN(t.open) AS avg_open,
+           MIN(t.open) AS min_open,
            MAX(t.close) AS max_close,
            CAlC_PERCENT(MIN(t.open), MAX(t.close)) AS percent
     FROM coin_pairs_24_hours AS t
@@ -403,7 +414,7 @@ FROM coin_pairs_24_hours AS t
 ) as hour4 ON t.coin_pair_id = hour4.coin_pair_id
          LEFT JOIN (
     SELECT t.coin_pair_id,
-           MIN(t.open) AS avg_open,
+           MIN(t.open) AS min_open,
            MAX(t.close) AS max_close,
            CAlC_PERCENT(MIN(t.open), MAX(t.close)) AS percent
     FROM coin_pairs_24_hours AS t
@@ -412,7 +423,7 @@ FROM coin_pairs_24_hours AS t
 ) as hour12 ON t.coin_pair_id = hour12.coin_pair_id
          LEFT JOIN (
     SELECT t.coin_pair_id,
-           MIN(t.open) AS avg_open,
+           MIN(t.open) AS min_open,
            MAX(t.close) AS max_close,
            CAlC_PERCENT(MIN(t.open), MAX(t.close)) AS percent
     FROM coin_pairs_24_hours AS t
@@ -423,12 +434,37 @@ FROM coin_pairs_24_hours AS t
 
 	if err != nil {
 		log.Panic("can't get get actual exchange rate: %v", err)
-		return rate, err
+		return "", err
 	}
 
 	if res.RowsAffected() == 0 {
-		return rate, errors.New("coin not found")
+		return "", errors.New("coin not found")
 	}
 
-	return rate, nil
+	tableString := &strings.Builder{}
+	table := tablewriter.NewWriter(tableString)
+	table.SetHeader([]string{"Name", "Value"})
+
+	table.Append([]string{"Coin id", IntToStr(int(rate.CoinId))})
+	table.Append([]string{"Coin", rate.Code})
+	table.Append([]string{"Rank", IntToStr(rate.Rank)})
+	table.Append([]string{"10 Minute", FloatToStr(rate.Minute10)})
+	table.Append([]string{"Hour", FloatToStr(rate.Hour)})
+	table.Append([]string{"4 Hour", FloatToStr(rate.Hour4)})
+	table.Append([]string{"12 Hour", FloatToStr(rate.Hour12)})
+	table.Append([]string{"24 Hour", FloatToStr(rate.Hour24)})
+	table.Append([]string{"10 Min open", FloatToStr(rate.Minute10MinOpen)})
+	table.Append([]string{"10 Max close", FloatToStr(rate.Minute10MaxClose)})
+	table.Append([]string{"Hour min open", FloatToStr(rate.HourMinOpen)})
+	table.Append([]string{"Hour max close", FloatToStr(rate.HourMaxClose)})
+	table.Append([]string{"4 Hour min open", FloatToStr(rate.Hour4MinOpen)})
+	table.Append([]string{"4 Hour max close", FloatToStr(rate.Hour4MaxClose)})
+	table.Append([]string{"12 Hour open", FloatToStr(rate.Hour12MinOpen)})
+	table.Append([]string{"12 Hour max close", FloatToStr(rate.Hour12MaxClose)})
+	table.Append([]string{"24 Hour min open", FloatToStr(rate.Hour24MinOpen)})
+	table.Append([]string{"24 Hour max close", FloatToStr(rate.Hour24MaxClose)})
+
+	table.Render()
+
+	return tableString.String(), nil
 }
