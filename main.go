@@ -172,7 +172,7 @@ WITH coin_pairs_24_hours AS (
     WHERE cp.couple = 'BUSD'
       AND c.is_enabled = 1
       AND cp.is_enabled = 1
-      AND k.open_time >= date_round_down(now(), '1 DAY')
+      AND k.open_time >= NOW() - INTERVAL '1 DAY'
     ORDER BY c.rank
 )
 
@@ -229,7 +229,6 @@ FROM (
                     MAX(t.close)                            AS max_close,
                     CAlC_PERCENT(MIN(t.open), MAX(t.close)) AS percent
              FROM coin_pairs_24_hours AS t
-             WHERE t.open_time >= date_round_down(NOW(), '1 DAY')
              GROUP BY t.coin_pair_id
          ) AS hour24 ON t.coin_pair_id = hour24.coin_pair_id
          WHERE (
