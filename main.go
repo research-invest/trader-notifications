@@ -193,7 +193,7 @@ FROM (
                     MAX(t.close)                            AS max_close,
                     CAlC_PERCENT(MIN(t.open), MAX(t.close)) AS percent
              FROM coin_pairs_24_hours AS t
-             WHERE t.open_time >= date_round_down(NOW(), '10 MINUTE')
+             WHERE t.open_time >= date_round_down(NOW() - interval '10 MINUTE', '10 MINUTE')
              GROUP BY t.coin_pair_id
          ) as minute10 ON t.coin_pair_id = minute10.coin_pair_id
                   LEFT JOIN (
@@ -202,7 +202,7 @@ FROM (
                     MAX(t.close)                            AS max_close,
                     CAlC_PERCENT(MIN(t.open), MAX(t.close)) AS percent
              FROM coin_pairs_24_hours AS t
-             WHERE t.open_time >= date_round_down(NOW(), '1 HOUR')
+             WHERE t.open_time >= date_round_down(NOW() - interval '1 HOUR', '1 HOUR')
              GROUP BY t.coin_pair_id
          ) as hour ON t.coin_pair_id = hour.coin_pair_id
                   LEFT JOIN (
@@ -211,7 +211,7 @@ FROM (
                     MAX(t.close)                            AS max_close,
                     CAlC_PERCENT(MIN(t.open), MAX(t.close)) AS percent
              FROM coin_pairs_24_hours AS t
-             WHERE t.open_time >= date_round_down(NOW(), '4 HOUR')
+             WHERE t.open_time >= date_round_down(NOW() - interval '4 HOUR', '1 HOUR')
              GROUP BY t.coin_pair_id
          ) as hour4 ON t.coin_pair_id = hour4.coin_pair_id
                   LEFT JOIN (
@@ -220,7 +220,7 @@ FROM (
                     MAX(t.close)                            AS max_close,
                     CAlC_PERCENT(MIN(t.open), MAX(t.close)) AS percent
              FROM coin_pairs_24_hours AS t
-             WHERE t.open_time >= date_round_down(NOW(), '12 HOUR')
+             WHERE t.open_time >= date_round_down(NOW() - interval '12 HOUR', '1 HOUR')
              GROUP BY t.coin_pair_id
          ) as hour12 ON t.coin_pair_id = hour12.coin_pair_id
                   LEFT JOIN (
@@ -345,7 +345,7 @@ WITH coin_pairs_24_hours AS (
     WHERE cp.couple = 'BUSD'
       AND c.is_enabled = 1
       AND cp.is_enabled = 1
-      AND k.open_time >= date_round_down(now(), '1 DAY')
+      AND k.open_time >= NOW() - INTERVAL '1 DAY'
       AND c.code = ?
 )
 
@@ -374,7 +374,7 @@ FROM coin_pairs_24_hours AS t
            MAX(t.close) AS max_close,
            CAlC_PERCENT(MIN(t.open), MAX(t.close)) AS percent
     FROM coin_pairs_24_hours AS t
-	WHERE t.open_time >= date_round_down(NOW(), '10 MINUTE')
+	WHERE t.open_time >= date_round_down(NOW() - interval '10 MINUTE', '10 MINUTE')
     GROUP BY t.coin_pair_id
 ) as minute10 ON t.coin_pair_id = minute10.coin_pair_id
          LEFT JOIN (
@@ -383,7 +383,7 @@ FROM coin_pairs_24_hours AS t
            MAX(t.close) AS max_close,
            CAlC_PERCENT(MIN(t.open), MAX(t.close)) AS percent
     FROM coin_pairs_24_hours AS t
-	WHERE t.open_time >= date_round_down(NOW(), '1 HOUR')
+	WHERE t.open_time >= date_round_down(NOW() - interval '1 HOUR', '1 HOUR')
     GROUP BY t.coin_pair_id
 ) as hour ON t.coin_pair_id = hour.coin_pair_id
          LEFT JOIN (
@@ -392,7 +392,7 @@ FROM coin_pairs_24_hours AS t
            MAX(t.close) AS max_close,
            CAlC_PERCENT(MIN(t.open), MAX(t.close)) AS percent
     FROM coin_pairs_24_hours AS t
-	WHERE t.open_time >= date_round_down(NOW(), '4 HOUR')
+	WHERE t.open_time >= date_round_down(NOW() - interval '4 HOUR', '1 HOUR')
     GROUP BY t.coin_pair_id
 ) as hour4 ON t.coin_pair_id = hour4.coin_pair_id
          LEFT JOIN (
@@ -401,7 +401,7 @@ FROM coin_pairs_24_hours AS t
            MAX(t.close) AS max_close,
            CAlC_PERCENT(MIN(t.open), MAX(t.close)) AS percent
     FROM coin_pairs_24_hours AS t
-	WHERE t.open_time >= date_round_down(NOW(), '12 HOUR')
+	WHERE t.open_time >= date_round_down(NOW() - interval '12 HOUR', '1 HOUR')
     GROUP BY t.coin_pair_id
 ) as hour12 ON t.coin_pair_id = hour12.coin_pair_id
          LEFT JOIN (
@@ -410,7 +410,6 @@ FROM coin_pairs_24_hours AS t
            MAX(t.close) AS max_close,
            CAlC_PERCENT(MIN(t.open), MAX(t.close)) AS percent
     FROM coin_pairs_24_hours AS t
-	WHERE t.open_time >= date_round_down(NOW(), '1 DAY')
     GROUP BY t.coin_pair_id
 ) AS hour24 ON t.coin_pair_id = hour24.coin_pair_id
 `, coin)
