@@ -87,12 +87,13 @@ type PercentCoin struct {
 }
 
 type PercentCoinShort struct {
-	CoinId   int64
-	Rank     int
-	Code     string
-	Minute10 float64
-	Hour     float64
-	Hour4    float64
-	Hour12   float64
-	Hour24   float64
+	CoinId     int64
+	Rank       int
+	Code       string
+	Minute10   float64
+	Hour       float64
+	Hour4      float64
+	Hour12     float64
+	Hour24     float64
+	PercentSum float64
 }
