@@ -47,10 +47,8 @@ func main() {
 			time.Sleep(1 * time.Hour) // temp
 		}
 
-		if t.Second() == 0 && (t.Minute() == 5 || t.Minute() == 35) {
-			sendNotifications() // mutex если в данный момент еще в работе
-			time.Sleep(30 * time.Minute)
-		}
+		sendNotifications() // mutex если в данный момент еще в работе
+		time.Sleep(30 * time.Minute)
 	}
 }
 
