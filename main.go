@@ -38,7 +38,7 @@ func main() {
 		telegramBot()
 	}()
 
-	sendNotifications() // mutex если в данный момент еще в работе
+	//sendNotifications() // mutex если в данный момент еще в работе
 
 	for {
 		t := time.Now()
@@ -47,7 +47,7 @@ func main() {
 			time.Sleep(1 * time.Hour) // temp
 		}
 
-		if t.Second() == 0 {
+		if t.Second() == 0 && (t.Minute() == 5 || t.Minute() == 35) {
 			sendNotifications() // mutex если в данный момент еще в работе
 			time.Sleep(30 * time.Minute)
 		}
@@ -176,7 +176,7 @@ WITH coin_pairs_24_hours AS (
     ORDER BY c.rank
 )
 
-SELECT t.*
+SELECT t.*, ROUND(CAST(minute10 + hour + hour4 + hour12 + hour24 AS NUMERIC), 3) AS percent_sum
 FROM (
          SELECT DISTINCT ON (t.coin_id) t.coin_id,
                                         t.code,
@@ -194,6 +194,8 @@ FROM (
                     CAlC_PERCENT(MIN(t.open), MAX(t.close)) AS percent
              FROM coin_pairs_24_hours AS t
              WHERE t.open_time >= date_round_down(NOW() - interval '10 MINUTE', '10 MINUTE')
+                OR (t.open_time <= date_round_down(NOW() - interval '10 MINUTE', '10 MINUTE') AND
+                    t.close_time >= NOW())
              GROUP BY t.coin_pair_id
          ) as minute10 ON t.coin_pair_id = minute10.coin_pair_id
                   LEFT JOIN (
@@ -240,7 +242,7 @@ FROM (
          ORDER BY t.coin_id
          LIMIT 45
      ) AS t
-ORDER BY t.rank ASC;
+ORDER BY percent_sum DESC;
 `)
 
 	if err != nil {
