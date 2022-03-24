@@ -154,19 +154,11 @@ func getPercentCoins(coins *[]PercentCoinShort) (err error) {
 	_, err = dbConnect.Query(coins, `
 
 WITH coin_pairs_24_hours AS (
-    SELECT k.coin_pair_id,
-           c.id as coin_id,
-           c.code,
-           k.open,
-           k.close,
-           k.high,
-           k.low,
-           k.open_time,
-           k.close_time,
-           c.rank
+    SELECT k.coin_pair_id, c.id as coin_id, c.code, k.open,
+           k.close, k.high, k.low, k.open_time, k.close_time, c.rank
     FROM klines AS k
-             INNER JOIN coins_pairs AS cp ON cp.id = k.coin_pair_id
-             INNER JOIN coins AS c ON c.id = cp.coin_id
+	 INNER JOIN coins_pairs AS cp ON cp.id = k.coin_pair_id
+	 INNER JOIN coins AS c ON c.id = cp.coin_id
     WHERE cp.couple = 'BUSD'
       AND c.is_enabled = 1
       AND cp.is_enabled = 1
@@ -174,7 +166,8 @@ WITH coin_pairs_24_hours AS (
     ORDER BY c.rank
 )
 
-SELECT t.*, ROUND(CAST(minute10 + hour + hour4 + hour12 + hour24 AS NUMERIC), 3) AS percent_sum
+SELECT t.*, 
+       ROUND(CAST(COALESCE(minute10, 0) + COALESCE(hour, 0) + COALESCE(hour4, 0) + COALESCE(hour12, 0) + COALESCE(hour, 12) AS NUMERIC), 3) AS percent_sum
 FROM (
          SELECT DISTINCT ON (t.coin_id) t.coin_id,
                                         t.code,
@@ -294,7 +287,7 @@ func sendNotifications() {
 
 	tableString := &strings.Builder{}
 	table := tablewriter.NewWriter(tableString)
-	table.SetHeader([]string{"Name", "Rank", "10m", "1h", "4h", "12h", "24h"})
+	table.SetHeader([]string{"Name", "Rank", "10m", "1h", "4h", "12h", "24h", "%"})
 
 	for _, coin := range coins {
 		table.Append([]string{
@@ -305,6 +298,7 @@ func sendNotifications() {
 			FloatToStr(coin.Hour4),
 			FloatToStr(coin.Hour12),
 			FloatToStr(coin.Hour24),
+			FloatToStr(coin.PercentSum),
 		})
 	}
 
