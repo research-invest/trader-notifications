@@ -102,7 +102,7 @@ func telegramBot() {
 			// Extract the command from the Message.
 			switch update.Message.Command() {
 			case "report":
-				msg.Text = "report"
+				msg.Text = getNotificationText()
 			case "status":
 				msg.Text = "I'm ok."
 			default:
@@ -157,8 +157,8 @@ WITH coin_pairs_24_hours AS (
     SELECT k.coin_pair_id, c.id as coin_id, c.code, k.open,
            k.close, k.high, k.low, k.open_time, k.close_time, c.rank
     FROM klines AS k
-	 INNER JOIN coins_pairs AS cp ON cp.id = k.coin_pair_id
-	 INNER JOIN coins AS c ON c.id = cp.coin_id
+             INNER JOIN coins_pairs AS cp ON cp.id = k.coin_pair_id
+             INNER JOIN coins AS c ON c.id = cp.coin_id
     WHERE cp.couple = 'BUSD'
       AND c.is_enabled = 1
       AND cp.is_enabled = 1
@@ -166,8 +166,7 @@ WITH coin_pairs_24_hours AS (
     ORDER BY c.rank
 )
 
-SELECT t.*, 
-       ROUND(CAST(COALESCE(minute10, 0) + COALESCE(hour, 0) + COALESCE(hour4, 0) + COALESCE(hour12, 0) + COALESCE(hour, 12) AS NUMERIC), 3) AS percent_sum
+SELECT t.*
 FROM (
          SELECT DISTINCT ON (t.coin_id) t.coin_id,
                                         t.code,
@@ -176,7 +175,10 @@ FROM (
                                         hour.percent     AS hour,
                                         hour4.percent    AS hour4,
                                         hour12.percent   AS hour12,
-                                        hour24.percent   AS hour24
+                                        hour24.percent   AS hour24,
+                                        ROUND(CAST(COALESCE(minute10.percent, 0) + COALESCE(hour.percent, 0) + 
+											COALESCE(hour4.percent, 0) + COALESCE(hour12.percent, 0) + 
+												COALESCE(hour24.percent, 12) AS NUMERIC), 3) AS percent_sum
          FROM coin_pairs_24_hours AS t
                   LEFT JOIN (
              SELECT t.coin_pair_id,
@@ -233,6 +235,7 @@ FROM (
          ORDER BY t.coin_id
          LIMIT 45
      ) AS t
+WHERE t.percent_sum >= 15
 ORDER BY percent_sum DESC;
 `)
 
@@ -244,46 +247,21 @@ ORDER BY percent_sum DESC;
 	return nil
 }
 
-func sendNotifications() {
-	if sendNotificationsIsWorking == true {
-		return
-	}
-
-	fmt.Println("Send notifications start work")
+func getNotificationText() string {
 
 	var coins []PercentCoinShort
 	err := getPercentCoins(&coins)
 
 	if err != nil {
+		log.Panic(err)
 		panic(err)
 	}
 
 	countCoins := len(coins)
 
 	if countCoins == 0 {
-		fmt.Println("countCoins is zero")
-		sendNotificationsIsWorking = false
-		return
+		return "No notifications"
 	}
-
-	sendNotificationsIsWorking = true
-
-	var subscribers []Subscriber
-	err = dbConnect.Model(&subscribers).
-		Where("is_enabled = ?", 1).
-		Select()
-
-	if err != nil {
-		log.Panic("can't get subscribers: %v", err)
-		panic(err)
-	}
-
-	bot, err := tgbotapi.NewBotAPI(appConfig.TelegramBot)
-	if err != nil {
-		log.Panic(err)
-	}
-
-	bot.Debug = false //!!!!
 
 	tableString := &strings.Builder{}
 	table := tablewriter.NewWriter(tableString)
@@ -304,8 +282,45 @@ func sendNotifications() {
 
 	table.Render()
 
+	return tableString.String()
+}
+
+func sendNotifications() {
+	if sendNotificationsIsWorking == true {
+		return
+	}
+
+	fmt.Println("Send notifications start work")
+
+	notificationText := getNotificationText()
+
+	if notificationText == "" {
+		fmt.Println("countCoins is zero")
+		sendNotificationsIsWorking = false
+		return
+	}
+
+	sendNotificationsIsWorking = true
+
+	var subscribers []Subscriber
+	err := dbConnect.Model(&subscribers).
+		Where("is_enabled = ?", 1).
+		Select()
+
+	if err != nil {
+		log.Panic("can't get subscribers: %v", err)
+		panic(err)
+	}
+
+	bot, err := tgbotapi.NewBotAPI(appConfig.TelegramBot)
+	if err != nil {
+		log.Panic(err)
+	}
+
+	bot.Debug = false //!!!!
+
 	for _, subscriber := range subscribers {
-		msg := tgbotapi.NewMessage(subscriber.TelegramId, tableString.String())
+		msg := tgbotapi.NewMessage(subscriber.TelegramId, notificationText)
 		if _, err := bot.Send(msg); err != nil {
 			log.Panic(err)
 		}
