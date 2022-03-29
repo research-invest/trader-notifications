@@ -14,7 +14,7 @@ type Subscriber struct {
 	tableName struct{} `pg:"notifications_subscribers"`
 
 	Id                int64
-	IsEnabled         int8   `pg:",is_enabled"`
+	IsEnabled         int8   `pg:",is_enabled,use_zero"`
 	TelegramId        int64  `pg:",telegram_id"`
 	TelegramFirstName string `pg:",telegram_first_name"`
 	TelegramLastName  string `pg:",telegram_last_name"`
@@ -25,7 +25,6 @@ type Subscriber struct {
 }
 
 func (a *Subscriber) addNew(data *tgbotapi.Chat) (acc *Subscriber, err error) {
-
 	newAccount := &Subscriber{
 		IsEnabled:         Subscriber_IS_ENABLED_TRUE,
 		TelegramId:        data.ID,
@@ -37,8 +36,9 @@ func (a *Subscriber) addNew(data *tgbotapi.Chat) (acc *Subscriber, err error) {
 
 	_, err = dbConnect.Model(newAccount).
 		Where("telegram_id = ?telegram_id").
-		OnConflict("DO NOTHING").
-		SelectOrInsert()
+		OnConflict("(telegram_id) DO UPDATE").
+		Set("is_enabled = ?is_enabled").
+		Insert()
 
 	return newAccount, err
 }

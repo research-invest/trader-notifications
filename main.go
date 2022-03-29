@@ -101,6 +101,8 @@ func telegramBot() {
 
 			// Extract the command from the Message.
 			switch update.Message.Command() {
+			case "start":
+				msg.Text = "Привет " + update.Message.Chat.FirstName + " я буду присылать тебе уведомления о движениях монет"
 			case "report":
 				msg.Text = getNotificationText()
 			case "status":
@@ -145,8 +147,7 @@ func dbInit() {
 
 	_, err := dbConnect.ExecContext(ctx, "SELECT 1; SET timezone = 'UTC';")
 	if err != nil {
-		log.Panic(err)
-		panic(err)
+		log.Warn(err)
 	}
 }
 
@@ -240,7 +241,7 @@ ORDER BY percent_sum DESC;
 `)
 
 	if err != nil {
-		log.Panic("can't get percent pairs: %v", err)
+		log.Error("can't get percent pairs: %v", err)
 		return err
 	}
 
@@ -253,8 +254,7 @@ func getNotificationText() string {
 	err := getPercentCoins(&coins)
 
 	if err != nil {
-		log.Panic(err)
-		panic(err)
+		return "Возникла ошибка №435/1"
 	}
 
 	countCoins := len(coins)
@@ -308,8 +308,9 @@ func sendNotifications() {
 		Select()
 
 	if err != nil {
-		log.Panic("can't get subscribers: %v", err)
-		panic(err)
+		log.Warn("can't get subscribers: %v", err)
+		sendNotificationsIsWorking = false
+		return
 	}
 
 	bot, err := tgbotapi.NewBotAPI(appConfig.TelegramBot)
@@ -322,7 +323,15 @@ func sendNotifications() {
 	for _, subscriber := range subscribers {
 		msg := tgbotapi.NewMessage(subscriber.TelegramId, notificationText)
 		if _, err := bot.Send(msg); err != nil {
-			log.Panic(err)
+			if strings.Contains(err.Error(), "Forbidden: bot was blocked by the user") { // to const error text
+				err := subscriber.enabledFalse()
+				if err != nil {
+					log.Warnf("Error disable subscriber: %v", err)
+					continue
+				}
+			} else {
+				log.Error(err)
+			}
 		}
 	}
 
