@@ -236,7 +236,7 @@ FROM (
          ORDER BY t.coin_id
          LIMIT 45
      ) AS t
-WHERE t.percent_sum >= 15
+WHERE t.percent_sum >= 40
 ORDER BY percent_sum DESC;
 `)
 
@@ -266,6 +266,7 @@ func getNotificationText() string {
 	tableString := &strings.Builder{}
 	table := tablewriter.NewWriter(tableString)
 	table.SetHeader([]string{"Name", "Rank", "10m", "1h", "4h", "12h", "24h", "%"})
+	table.SetCaption(true, "Coins.")
 
 	for _, coin := range coins {
 		table.Append([]string{
@@ -315,7 +316,8 @@ func sendNotifications() {
 
 	bot, err := tgbotapi.NewBotAPI(appConfig.TelegramBot)
 	if err != nil {
-		log.Panic(err)
+		log.Warn(err)
+		return
 	}
 
 	bot.Debug = false //!!!!
