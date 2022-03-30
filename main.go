@@ -265,19 +265,17 @@ func getNotificationText() string {
 
 	tableString := &strings.Builder{}
 	table := tablewriter.NewWriter(tableString)
-	table.SetHeader([]string{"Name", "Rank", "10m", "1h", "4h", "12h", "24h", "%"})
+	table.SetHeader([]string{"Name", "10m", "1h", "4h", "12h", "24h"})
 	table.SetCaption(true, "Coins.")
 
 	for _, coin := range coins {
 		table.Append([]string{
-			coin.Code,
-			IntToStr(coin.Rank),
+			coin.Code + " [" + IntToStr(coin.Rank) + "]",
 			FloatToStr(coin.Minute10),
 			FloatToStr(coin.Hour),
 			FloatToStr(coin.Hour4),
 			FloatToStr(coin.Hour12),
 			FloatToStr(coin.Hour24),
-			FloatToStr(coin.PercentSum),
 		})
 	}
 
