@@ -93,7 +93,7 @@ func telegramBot() {
 		}
 
 		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "")
-
+		msg.ParseMode = "MarkdownV2"
 		if update.Message.IsCommand() { // ignore any non-command Messages
 
 			//report - Report
@@ -104,7 +104,7 @@ func telegramBot() {
 			case "start":
 				msg.Text = "Привет " + update.Message.Chat.FirstName + " я буду присылать тебе уведомления о движениях монет"
 			case "report":
-				msg.Text = getNotificationText()
+				msg.Text = "```" + getNotificationText() + "```"
 			case "status":
 				msg.Text = "I'm ok."
 			default:
@@ -121,7 +121,7 @@ func telegramBot() {
 		rate, err := getActualExchangeRate(update.Message.Text)
 
 		if err == nil {
-			msg.Text = rate
+			msg.Text = "```" + rate + "```"
 			if _, err := bot.Send(msg); err != nil {
 				log.Warnf("can't send bot message getActualExchangeRate: %v", err)
 			}
@@ -321,7 +321,8 @@ func sendNotifications() {
 	bot.Debug = false //!!!!
 
 	for _, subscriber := range subscribers {
-		msg := tgbotapi.NewMessage(subscriber.TelegramId, notificationText)
+		msg := tgbotapi.NewMessage(subscriber.TelegramId, "```"+notificationText+"```")
+		msg.ParseMode = "MarkdownV2"
 		if _, err := bot.Send(msg); err != nil {
 			if strings.Contains(err.Error(), "Forbidden: bot was blocked by the user") { // to const error text
 				err := subscriber.enabledFalse()
