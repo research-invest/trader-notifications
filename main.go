@@ -47,8 +47,12 @@ func main() {
 			time.Sleep(1 * time.Hour) // temp
 		}
 
-		sendNotifications() // mutex если в данный момент еще в работе
-		time.Sleep(30 * time.Minute)
+		if t.Minute() == 0 || t.Minute() == 30 {
+			sendNotifications() // mutex если в данный момент еще в работе
+			time.Sleep(30 * time.Minute)
+		}
+
+		time.Sleep(30 * time.Second)
 	}
 }
 
@@ -260,7 +264,7 @@ func getNotificationText() string {
 	countCoins := len(coins)
 
 	if countCoins == 0 {
-		return "No notifications"
+		return ""
 	}
 
 	tableString := &strings.Builder{}
