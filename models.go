@@ -97,3 +97,14 @@ type PercentCoinShort struct {
 	Hour24     float64
 	PercentSum float64
 }
+
+type ConsolidationPeriodCoin struct {
+	CoinId int64
+	Rank   int
+	Code   string
+	//Opens    []float64
+	AvgOpen  float64
+	AvgClose float64
+	Price    float64
+	Percent  float64
+}

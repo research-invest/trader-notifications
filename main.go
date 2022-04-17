@@ -38,6 +38,13 @@ func main() {
 		telegramBot()
 	}()
 
+	go func() {
+		for {
+			sendConsolidationPeriod()
+			time.Sleep(30 * time.Minute)
+		}
+	}()
+
 	//sendNotifications() // mutex если в данный момент еще в работе
 
 	for {
@@ -49,10 +56,9 @@ func main() {
 
 		if t.Minute() == 0 || t.Minute() == 30 {
 			sendNotifications() // mutex если в данный момент еще в работе
-			time.Sleep(30 * time.Minute)
 		}
 
-		time.Sleep(30 * time.Second)
+		time.Sleep(45 * time.Second)
 	}
 }
 
@@ -341,6 +347,133 @@ func sendNotifications() {
 	}
 
 	sendNotificationsIsWorking = false
+}
+
+func getConsolidationPeriodCoins(coins *[]ConsolidationPeriodCoin) (err error) {
+	_, err = dbConnect.Query(coins, `
+
+WITH coins_last_prices AS (
+    SELECT DISTINCT ON (k.coin_pair_id) k.coin_pair_id, c.id AS coin_id, k.close
+    FROM klines AS k
+             INNER JOIN coins_pairs AS cp ON cp.id = k.coin_pair_id
+             INNER JOIN coins AS c ON c.id = cp.coin_id
+    WHERE cp.couple = 'BUSD'
+      AND c.is_enabled = 1
+      AND cp.is_enabled = 1
+    ORDER BY k.coin_pair_id, k.close_time DESC
+)
+
+SELECT t.*, CAlC_PERCENT(price, avg_open) AS percent
+FROM (
+         SELECT c.id AS coin_id, c.code, c.rank, avg(k.open) AS avg_open, avg(k.close) AS avg_close, clp.close AS price --array_agg(k.open) AS opens,
+         FROM coins AS c
+                  INNER JOIN coins_pairs cp on cp.coin_id = c.id
+                  LEFT JOIN (
+             SELECT date_trunc('day', k.open_time) AS day,
+                    k.coin_pair_id,
+                    AVG(k.open)                    AS open,
+                    AVG(k.close)                   AS close
+             FROM klines AS k
+             WHERE k.open_time >= date_round_down(NOW() - interval '14 DAY', '1 HOUR') --AND k.coin_pair_id = 1634
+             GROUP BY day, k.coin_pair_id
+             ORDER BY day DESC
+         ) AS k on cp.id = k.coin_pair_id
+                  LEFT JOIN coins_last_prices AS clp ON clp.coin_id = c.id
+         WHERE c.rank <= 50
+           AND c.is_enabled = 1
+           AND cp.is_enabled = 1
+         GROUP BY c.id, c.code, clp.close
+     ) AS t
+WHERE CAlC_PERCENT(price, avg_open) <= 3 AND CAlC_PERCENT(price, avg_close) <= 3;
+`)
+
+	if err != nil {
+		log.Error("can't get consolidation period: %v", err)
+		return err
+	}
+
+	return nil
+}
+
+func getConsolidationPeriodText() string {
+
+	var coins []ConsolidationPeriodCoin
+	err := getConsolidationPeriodCoins(&coins)
+
+	if err != nil {
+		return "Возникла ошибка №435/2"
+	}
+
+	countCoins := len(coins)
+
+	if countCoins == 0 {
+		return ""
+	}
+
+	tableString := &strings.Builder{}
+	table := tablewriter.NewWriter(tableString)
+	table.SetHeader([]string{"Name", "Open", "Close", "Price", "Percent"})
+	table.SetCaption(true, "Coins in period consolidation")
+
+	for _, coin := range coins {
+		table.Append([]string{
+			coin.Code + " [" + IntToStr(coin.Rank) + "]",
+			FloatToStr(coin.AvgOpen),
+			FloatToStr(coin.AvgClose),
+			FloatToStr(coin.Price),
+			FloatToStr(coin.Percent),
+		})
+	}
+
+	table.Render()
+
+	return tableString.String()
+}
+
+func sendConsolidationPeriod() {
+
+	fmt.Println("Send consolidationPeriod start work")
+
+	notificationText := getConsolidationPeriodText()
+
+	if notificationText == "" {
+		fmt.Println("countCoins is zero")
+		return
+	}
+
+	var subscribers []Subscriber
+	err := dbConnect.Model(&subscribers).
+		Where("is_enabled = ?", 1).
+		Select()
+
+	if err != nil {
+		log.Warn("can't get subscribers: %v", err)
+		return
+	}
+
+	bot, err := tgbotapi.NewBotAPI(appConfig.TelegramBot)
+	if err != nil {
+		log.Warn(err)
+		return
+	}
+
+	bot.Debug = false //!!!!
+
+	for _, subscriber := range subscribers {
+		msg := tgbotapi.NewMessage(subscriber.TelegramId, "```"+notificationText+"```")
+		msg.ParseMode = "MarkdownV2"
+		if _, err := bot.Send(msg); err != nil {
+			if strings.Contains(err.Error(), "Forbidden: bot was blocked by the user") { // to const error text
+				err := subscriber.enabledFalse()
+				if err != nil {
+					log.Warnf("Error disable subscriber: %v", err)
+					continue
+				}
+			} else {
+				log.Error(err)
+			}
+		}
+	}
 }
 
 func getActualExchangeRate(message string) (string, error) {
