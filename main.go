@@ -363,9 +363,11 @@ WITH coins_last_prices AS (
     ORDER BY k.coin_pair_id, k.close_time DESC
 )
 
-SELECT t.*, CAlC_PERCENT(price, avg_open) AS percent
+SELECT t.*
 FROM (
-         SELECT c.id AS coin_id, c.code, c.rank, avg(k.open) AS avg_open, avg(k.close) AS avg_close, clp.close AS price --array_agg(k.open) AS opens,
+         SELECT c.id AS coin_id, c.code, c.rank, avg(k.open) AS avg_open, avg(k.close) AS avg_close,
+                clp.close AS price, CAlC_PERCENT(avg(k.open),clp.close) AS percent_open,
+                 CAlC_PERCENT(avg(k.close),clp.close) AS percent_close --array_agg(k.open) AS opens,
          FROM coins AS c
                   INNER JOIN coins_pairs cp on cp.coin_id = c.id
                   LEFT JOIN (
@@ -374,17 +376,15 @@ FROM (
                     AVG(k.open)                    AS open,
                     AVG(k.close)                   AS close
              FROM klines AS k
-             WHERE k.open_time >= date_round_down(NOW() - interval '14 DAY', '1 HOUR') --AND k.coin_pair_id = 1634
+             WHERE k.open_time >= date_round_down(NOW() - interval '14 DAY', '1 HOUR')
              GROUP BY day, k.coin_pair_id
              ORDER BY day DESC
          ) AS k on cp.id = k.coin_pair_id
-                  LEFT JOIN coins_last_prices AS clp ON clp.coin_id = c.id
-         WHERE c.rank <= 50
-           AND c.is_enabled = 1
-           AND cp.is_enabled = 1
+			LEFT JOIN coins_last_prices AS clp ON clp.coin_id = c.id
+         WHERE c.is_enabled = 1 AND cp.is_enabled = 1
          GROUP BY c.id, c.code, clp.close
      ) AS t
-WHERE CAlC_PERCENT(price, avg_open) <= 3 AND CAlC_PERCENT(price, avg_close) <= 3;
+WHERE (percent_open >=0 AND percent_open <= 5) AND (percent_close >=0 AND percent_close <= 5);
 `)
 
 	if err != nil {
@@ -412,7 +412,7 @@ func getConsolidationPeriodText() string {
 
 	tableString := &strings.Builder{}
 	table := tablewriter.NewWriter(tableString)
-	table.SetHeader([]string{"Name", "Open", "Close", "Price", "Percent"})
+	table.SetHeader([]string{"Name", "Open", "Close", "Price"})
 	table.SetCaption(true, "Coins in period consolidation")
 
 	for _, coin := range coins {
@@ -421,7 +421,6 @@ func getConsolidationPeriodText() string {
 			FloatToStr(coin.AvgOpen),
 			FloatToStr(coin.AvgClose),
 			FloatToStr(coin.Price),
-			FloatToStr(coin.Percent),
 		})
 	}
 

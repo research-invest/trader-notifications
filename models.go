@@ -103,8 +103,9 @@ type ConsolidationPeriodCoin struct {
 	Rank   int
 	Code   string
 	//Opens    []float64
-	AvgOpen  float64
-	AvgClose float64
-	Price    float64
-	Percent  float64
+	AvgOpen      float64
+	AvgClose     float64
+	Price        float64
+	PercentOpen  float64
+	PercentClose float64
 }
