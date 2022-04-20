@@ -384,7 +384,7 @@ FROM (
          WHERE c.is_enabled = 1 AND cp.is_enabled = 1
          GROUP BY c.id, c.code, clp.close
      ) AS t
-WHERE (percent_open >=0 AND percent_open <= 5) AND (percent_close >=0 AND percent_close <= 5);
+WHERE (percent_open >=-5 AND percent_open <= 5) AND (percent_close >=-5 AND percent_close <= 5);
 `)
 
 	if err != nil {
@@ -412,7 +412,7 @@ func getConsolidationPeriodText() string {
 
 	tableString := &strings.Builder{}
 	table := tablewriter.NewWriter(tableString)
-	table.SetHeader([]string{"Name", "Open", "Close", "Price"})
+	table.SetHeader([]string{"Name", "Avg open", "Avg close", "Price"})
 	table.SetCaption(true, "Coins in period consolidation")
 
 	for _, coin := range coins {
