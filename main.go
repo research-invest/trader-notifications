@@ -417,7 +417,7 @@ func getConsolidationPeriodText() string {
 
 	for _, coin := range coins {
 		table.Append([]string{
-			coin.Code + " [" + IntToStr(coin.Rank) + "]",
+			coin.Code, // + " [" + IntToStr(coin.Rank) + "]"
 			FloatToStr(coin.AvgOpen),
 			FloatToStr(coin.AvgClose),
 			FloatToStr(coin.Price),
@@ -426,7 +426,7 @@ func getConsolidationPeriodText() string {
 
 	table.Render()
 
-	return tableString.String()
+	return tableString.String()[:4000]
 }
 
 func sendConsolidationPeriod() {
