@@ -384,7 +384,7 @@ FROM (
          WHERE c.is_enabled = 1 AND cp.is_enabled = 1
          GROUP BY c.id, c.code, clp.close
      ) AS t
-WHERE (percent_open >=-5 AND percent_open <= 5) AND (percent_close >=-5 AND percent_close <= 5);
+WHERE (percent_open >=-3 AND percent_open <= 5) AND (percent_close >=-3 AND percent_close <= 5);
 `)
 
 	if err != nil {
@@ -470,6 +470,8 @@ func sendConsolidationPeriod() {
 				}
 			} else {
 				log.Error(err)
+				msg := tgbotapi.NewMessage(subscriber.TelegramId, err.Error())
+				bot.Send(msg)
 			}
 		}
 	}
