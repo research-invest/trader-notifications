@@ -433,7 +433,13 @@ func getConsolidationPeriodText() string {
 
 	table.Render()
 
-	return tableString.String()[:4000]
+	result := tableString.String()
+
+	if len(result) > 4000 {
+		return result[:4000]
+	}
+
+	return result
 }
 
 func sendConsolidationPeriod() {
