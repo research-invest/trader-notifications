@@ -41,7 +41,7 @@ func main() {
 	go func() {
 		for {
 			sendConsolidationPeriod()
-			time.Sleep(30 * time.Minute)
+			time.Sleep(24 * time.Hour)
 		}
 	}()
 
