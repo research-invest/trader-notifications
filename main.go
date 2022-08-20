@@ -1,13 +1,18 @@
 package main
 
+//GOOS=linux GOARCH=amd64 go build -o ./notifications -a
+
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"github.com/go-pg/pg/v10"
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/olekukonko/tablewriter"
 	"github.com/sirupsen/logrus"
+	"github.com/wcharczuk/go-chart"
+	"github.com/wcharczuk/go-chart/drawing"
 	"os"
 	"strconv"
 	"strings"
@@ -40,8 +45,13 @@ func main() {
 
 	go func() {
 		for {
-			sendConsolidationPeriod()
-			time.Sleep(24 * time.Hour)
+			t := time.Now()
+			if t.Hour() == 10 {
+				sendConsolidationPeriod()
+				time.Sleep(24 * time.Hour)
+			}
+
+			time.Sleep(30 * time.Second)
 		}
 	}()
 
@@ -86,7 +96,7 @@ func telegramBot() {
 	u := tgbotapi.NewUpdate(0)
 	u.Timeout = 60
 
-	updates, _ := bot.GetUpdatesChan(u)
+	updates := bot.GetUpdatesChan(u)
 
 	for update := range updates {
 		if update.Message == nil { // ignore any non-Message updates
@@ -94,7 +104,7 @@ func telegramBot() {
 		}
 
 		sub := Subscriber{}
-		_, err := sub.addNew(update.Message.Chat) //subscriber
+		subscriber, err := sub.addNew(update.Message.Chat) //subscriber
 
 		if err != nil {
 			fmt.Printf("can't add a new file db record : %v\n", err)
@@ -116,13 +126,13 @@ func telegramBot() {
 			case "report":
 				msg.Text = "```" + getNotificationText() + "```"
 			case "status":
-				msg.Text = "I'm ok."
+				msg.Text = "I m ok"
 			default:
 				msg.Text = "I don't know that command"
 			}
 
 			if _, err := bot.Send(msg); err != nil {
-				log.Panic(err)
+				log.Warnf(err.Error())
 			}
 
 			continue
@@ -140,6 +150,12 @@ func telegramBot() {
 			if _, err := bot.Send(msg); err != nil {
 				log.Warnf("can't send bot message getActualExchangeRate: %v", err)
 			}
+		}
+
+		if rate != "" {
+			coin := strings.ToUpper(strings.TrimSpace(update.Message.Text))
+			coin = strings.Replace(coin, "?", "", 100)
+			sendBtcGraph(subscriber.Id, coin)
 		}
 
 	}
@@ -351,6 +367,8 @@ func sendNotifications() {
 				log.Error(err)
 			}
 		}
+
+		sendBtcGraph(subscriber.TelegramId, "")
 	}
 
 	sendNotificationsIsWorking = false
@@ -585,7 +603,7 @@ FROM coin_pairs_24_hours AS t
 `, coin)
 
 	if err != nil {
-		log.Panic("can't get get actual exchange rate: %v", err)
+		log.Warn("can't get get actual exchange rate: %v", err)
 		return "", err
 	}
 
@@ -619,4 +637,154 @@ FROM coin_pairs_24_hours AS t
 	table.Render()
 
 	return tableString.String(), nil
+}
+
+func getDataForBtcGraph(coin string) ([]time.Time, []float64, []float64) {
+	var times []time.Time
+	var closes, volumes []float64
+	var klines []Kline
+
+	if coin == "" {
+		coin = "BTC"
+	}
+
+	res, err := dbConnect.Query(&klines, `
+SELECT klines.*
+FROM klines
+INNER JOIN coins_pairs cp on klines.coin_pair_id = cp.id
+INNER JOIN coins c on c.id = cp.coin_id
+WHERE open_time >=  date_round_down(NOW() - interval '4 HOUR', '1 HOUR')
+ AND c.code = ?
+ORDER BY id ASC;
+`, coin)
+
+	if err != nil {
+		log.Warn("can't get getDataForBtcGraph: %v", err)
+		return nil, nil, nil
+	}
+
+	if res.RowsAffected() == 0 {
+		return nil, nil, nil
+	}
+
+	for _, kline := range klines {
+		times = append(times, kline.OpenTime)
+		closes = append(closes, kline.Close)
+		volumes = append(volumes, kline.QuoteAssetVolume)
+	}
+
+	return times, closes, volumes
+}
+
+func sendBtcGraph(subscriberId int64, coin string) {
+	var subscribers []Subscriber
+	var query = dbConnect.Model(&subscribers).
+		Where("is_enabled = ?", 1)
+
+	if subscriberId > 0 {
+		query.Where("id = ?", subscriberId)
+	}
+
+	err := query.Select()
+
+	if err != nil {
+		log.Warnf("can't get subscribers by get sendBtcGraph: %v", err)
+		return
+	}
+
+	bot, err := tgbotapi.NewBotAPI(appConfig.TelegramBot)
+	if err != nil {
+		log.Warn(err)
+		return
+	}
+
+	bot.Debug = false //!!!!
+
+	xv, yv, _ := getDataForBtcGraph(coin)
+
+	if len(xv) == 0 {
+		return
+	}
+
+	priceSeries := chart.TimeSeries{
+		Name: coin + " 4H",
+		Style: chart.Style{
+			Show:        true,
+			StrokeColor: chart.GetDefaultColor(0),
+		},
+		XValues: xv,
+		YValues: yv,
+	}
+
+	smaSeries := chart.SMASeries{ // красная линия
+		Name: coin + " - SMA",
+		Style: chart.Style{
+			Show:            true,
+			StrokeColor:     drawing.ColorRed,
+			StrokeDashArray: []float64{5.0, 5.0},
+		},
+		InnerSeries: priceSeries,
+	}
+
+	bbSeries := &chart.BollingerBandsSeries{ //фоновый
+		Name: coin + " - Bol. Bands",
+		Style: chart.Style{
+			Show:        true,
+			StrokeColor: drawing.ColorFromHex("efefef"),
+			FillColor:   drawing.ColorFromHex("efefef"), //.WithAlpha(100)
+		},
+		InnerSeries: priceSeries,
+	}
+
+	min, max := findMinAndMax(yv)
+
+	graph := chart.Chart{
+		XAxis: chart.XAxis{
+			Style:        chart.Style{Show: true},
+			TickPosition: chart.TickPositionBetweenTicks,
+		},
+		YAxis: chart.YAxis{
+			Style: chart.Style{Show: true},
+			Range: &chart.ContinuousRange{
+				Max: max,
+				Min: min,
+			},
+		},
+		Series: []chart.Series{
+			bbSeries,
+			priceSeries,
+			smaSeries,
+		},
+	}
+
+	//----
+
+	graph.Elements = []chart.Renderable{
+		chart.Legend(&graph),
+	}
+
+	buffer := bytes.NewBuffer([]byte{})
+	err = graph.Render(chart.PNG, buffer)
+
+	for _, subscriber := range subscribers {
+
+		photoFileBytes := tgbotapi.FileBytes{
+			Name:  "picture",
+			Bytes: buffer.Bytes(),
+		}
+
+		photo := tgbotapi.NewPhoto(subscriber.TelegramId, photoFileBytes)
+
+		if _, err := bot.Send(photo); err != nil {
+			if strings.Contains(err.Error(), "Forbidden: bot was blocked by the user") { // todo to const error text
+				err := subscriber.enabledFalse()
+				if err != nil {
+					log.Warnf("Error disable subscriber: %v", err)
+					continue
+				}
+			} else {
+				log.Error(err)
+			}
+		}
+	}
 }

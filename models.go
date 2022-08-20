@@ -1,7 +1,7 @@
 package main
 
 import (
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"time"
 )
 
@@ -108,4 +108,24 @@ type ConsolidationPeriodCoin struct {
 	Price        float64
 	PercentOpen  float64
 	PercentClose float64
+}
+
+type Kline struct {
+	tableName struct{} `pg:"klines"`
+
+	Id                       int64
+	CoinPairId               int64     //`pg:",coin_pair_id,foreign:klines_coin_pair_id_fkey"`
+	OpenTime                 time.Time //`pg:",open_time"`
+	CloseTime                time.Time //`pg:",close_time"`
+	Open                     float64   //`pg:",open"`
+	High                     float64   //`pg:",high"`
+	Low                      float64   //`pg:",low"`
+	Close                    float64   //`pg:",close"`
+	Volume                   float64   `pg:",volume,use_zero"`
+	QuoteAssetVolume         float64   `pg:",quote_asset_volume,use_zero"`
+	TradeNum                 int64     `pg:",trade_num,use_zero"`
+	TakerBuyBaseAssetVolume  float64   `pg:",taker_buy_base_asset_volume,use_zero"`
+	TakerBuyQuoteAssetVolume float64   `pg:",taker_buy_quote_asset_volume,use_zero"`
+	RatioOpenClose           float64   //`pg:",ratio_open_close"`
+	RatioHighLow             float64   //`pg:",ratio_high_low"`
 }
