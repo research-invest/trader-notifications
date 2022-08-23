@@ -89,6 +89,17 @@ func telegramBot() {
 		log.Panic(err)
 	}
 
+	var replyMarkup = tgbotapi.NewReplyKeyboard(
+		tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButton("Btc ❤️"),
+			tgbotapi.NewKeyboardButton("Btc ❤️ 10m"),
+			tgbotapi.NewKeyboardButton("Btc ❤️ 1H"),
+		),
+		tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButton("Есь че? 😘"),
+		),
+	)
+
 	bot.Debug = false //!!!!
 
 	log.Printf("Authorized on account %s", bot.Self.UserName)
@@ -114,6 +125,8 @@ func telegramBot() {
 
 		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "")
 		msg.ParseMode = "MarkdownV2"
+		msg.ReplyMarkup = replyMarkup
+
 		if update.Message.IsCommand() { // ignore any non-command Messages
 
 			//report - Report
@@ -123,41 +136,43 @@ func telegramBot() {
 			switch update.Message.Command() {
 			case "start":
 				msg.Text = "Привет " + update.Message.Chat.FirstName + " я буду присылать тебе уведомления о движениях монет"
-			case "report":
-				msg.Text = "```" + getNotificationText() + "```"
 			case "status":
 				msg.Text = "I m ok"
 			default:
 				msg.Text = "I don't know that command"
 			}
-
-			if _, err := bot.Send(msg); err != nil {
-				log.Warnf(err.Error())
-			}
-
-			continue
 		}
 
-		rate, err := getActualExchangeRate(update.Message.Text)
-
-		if err == nil {
-			msg.Text = "```" + rate + "```"
-			if _, err := bot.Send(msg); err != nil {
-				log.Warnf("can't send bot message getActualExchangeRate: %v", err)
+		switch update.Message.Text {
+		case "Btc ❤️":
+			msg.Text = ""
+			sendCoinGraph(subscriber.TelegramId, "BTC", "")
+		case "Btc ❤️ 10m":
+			msg.Text = ""
+			sendCoinGraph(subscriber.TelegramId, "BTC", "10m")
+		case "Btc ❤️ 1H":
+			msg.Text = ""
+			sendCoinGraph(subscriber.TelegramId, "BTC", "1H")
+		case "Есь че? 😘":
+			msg.Text = "```" + getNotificationText() + "```"
+		default:
+			rate, err := getActualExchangeRate(update.Message.Text)
+			if err == nil {
+				msg.Text = "```" + rate + "```"
+			} else {
+				msg.Text = err.Error()
 			}
-		} else {
-			msg.Text = err.Error()
-			if _, err := bot.Send(msg); err != nil {
-				log.Warnf("can't send bot message getActualExchangeRate: %v", err)
+
+			if rate != "" {
+				coin := strings.ToUpper(strings.TrimSpace(update.Message.Text))
+				coin = strings.Replace(coin, "?", "", 100)
+				sendCoinGraph(subscriber.TelegramId, coin, "1H")
 			}
 		}
 
-		if rate != "" {
-			coin := strings.ToUpper(strings.TrimSpace(update.Message.Text))
-			coin = strings.Replace(coin, "?", "", 100)
-			sendCoinGraph(subscriber.TelegramId, coin)
+		if _, err := bot.Send(msg); err != nil {
+			log.Warnf("can't send bot message telegramBot: %v", err)
 		}
-
 	}
 }
 
@@ -373,7 +388,7 @@ func sendNotifications() {
 			}
 		}
 
-		sendCoinGraph(subscriber.TelegramId, "")
+		sendCoinGraph(subscriber.TelegramId, "", "")
 	}
 
 	sendNotificationsIsWorking = false
@@ -644,7 +659,7 @@ FROM coin_pairs_24_hours AS t
 	return tableString.String(), nil
 }
 
-func getDataForCoinGraph(coin string) ([]time.Time, []float64, []float64) {
+func getDataForCoinGraph(coin string, typeInterval string) ([]time.Time, []float64, []float64) {
 	var times []time.Time
 	var closes, volumes []float64
 	var klines []Kline
@@ -653,12 +668,25 @@ func getDataForCoinGraph(coin string) ([]time.Time, []float64, []float64) {
 		coin = "BTC"
 	}
 
+	var interval string
+
+	switch typeInterval {
+	case "4H":
+	case "":
+		//default:
+		interval = "4 HOUR"
+	case "10m":
+		interval = "10 MINUTE"
+	case "1H":
+		interval = "1 HOUR"
+	}
+
 	res, err := dbConnect.Query(&klines, `
 SELECT klines.*
 FROM klines
 INNER JOIN coins_pairs cp on klines.coin_pair_id = cp.id
 INNER JOIN coins c on c.id = cp.coin_id
-WHERE open_time >= NOW() - interval '4 HOUR'
+WHERE open_time >= (NOW() - interval '`+interval+`')
  AND c.code = ?
 ORDER BY id ASC;
 `, coin)
@@ -681,7 +709,7 @@ ORDER BY id ASC;
 	return times, closes, volumes
 }
 
-func sendCoinGraph(telegramId int64, coin string) {
+func sendCoinGraph(telegramId int64, coin string, interval string) {
 	var subscribers []Subscriber
 	var query = dbConnect.Model(&subscribers).
 		Where("is_enabled = ?", 1)
@@ -710,18 +738,22 @@ func sendCoinGraph(telegramId int64, coin string) {
 
 	bot.Debug = false //!!!!
 
-	xv, yv, _ := getDataForCoinGraph(coin)
+	if coin == "" {
+		coin = "BTC"
+	}
+
+	xv, yv, _ := getDataForCoinGraph(coin, interval)
 
 	if len(xv) == 0 {
 		return
 	}
 
-	if coin == "" {
-		coin = "BTC"
+	if interval == "" {
+		interval = "4H"
 	}
 
 	priceSeries := chart.TimeSeries{
-		Name: coin + " 4H",
+		Name: coin + " " + interval,
 		Style: chart.Style{
 			Show:        true,
 			StrokeColor: chart.GetDefaultColor(0),
