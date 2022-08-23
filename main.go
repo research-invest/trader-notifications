@@ -658,7 +658,7 @@ SELECT klines.*
 FROM klines
 INNER JOIN coins_pairs cp on klines.coin_pair_id = cp.id
 INNER JOIN coins c on c.id = cp.coin_id
-WHERE open_time >=  date_round_down(NOW() - interval '4 HOUR', '1 HOUR')
+WHERE open_time >= NOW() - interval '4 HOUR'
  AND c.code = ?
 ORDER BY id ASC;
 `, coin)
