@@ -155,7 +155,7 @@ func telegramBot() {
 		if rate != "" {
 			coin := strings.ToUpper(strings.TrimSpace(update.Message.Text))
 			coin = strings.Replace(coin, "?", "", 100)
-			sendBtcGraph(subscriber.Id, coin)
+			sendCoinGraph(subscriber.TelegramId, coin)
 		}
 
 	}
@@ -351,6 +351,11 @@ func sendNotifications() {
 		return
 	}
 
+	defer func() {
+		subscribers = nil
+		bot = nil
+	}()
+
 	bot.Debug = false //!!!!
 
 	for _, subscriber := range subscribers {
@@ -368,7 +373,7 @@ func sendNotifications() {
 			}
 		}
 
-		sendBtcGraph(subscriber.TelegramId, "")
+		sendCoinGraph(subscriber.TelegramId, "")
 	}
 
 	sendNotificationsIsWorking = false
@@ -639,7 +644,7 @@ FROM coin_pairs_24_hours AS t
 	return tableString.String(), nil
 }
 
-func getDataForBtcGraph(coin string) ([]time.Time, []float64, []float64) {
+func getDataForCoinGraph(coin string) ([]time.Time, []float64, []float64) {
 	var times []time.Time
 	var closes, volumes []float64
 	var klines []Kline
@@ -659,7 +664,7 @@ ORDER BY id ASC;
 `, coin)
 
 	if err != nil {
-		log.Warn("can't get getDataForBtcGraph: %v", err)
+		log.Warn("can't get getDataForCoinGraph: %v", err)
 		return nil, nil, nil
 	}
 
@@ -676,19 +681,19 @@ ORDER BY id ASC;
 	return times, closes, volumes
 }
 
-func sendBtcGraph(subscriberId int64, coin string) {
+func sendCoinGraph(telegramId int64, coin string) {
 	var subscribers []Subscriber
 	var query = dbConnect.Model(&subscribers).
 		Where("is_enabled = ?", 1)
 
-	if subscriberId > 0 {
-		query.Where("id = ?", subscriberId)
+	if telegramId > 0 {
+		query.Where("telegram_id = ?", telegramId)
 	}
 
 	err := query.Select()
 
 	if err != nil {
-		log.Warnf("can't get subscribers by get sendBtcGraph: %v", err)
+		log.Warnf("can't get subscribers by get sendCoinGraph: %v", err)
 		return
 	}
 
@@ -698,9 +703,14 @@ func sendBtcGraph(subscriberId int64, coin string) {
 		return
 	}
 
+	defer func() {
+		subscribers = nil
+		bot = nil
+	}()
+
 	bot.Debug = false //!!!!
 
-	xv, yv, _ := getDataForBtcGraph(coin)
+	xv, yv, _ := getDataForCoinGraph(coin)
 
 	if len(xv) == 0 {
 		return
