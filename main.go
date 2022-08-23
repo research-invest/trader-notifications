@@ -716,6 +716,10 @@ func sendCoinGraph(telegramId int64, coin string) {
 		return
 	}
 
+	if coin == "" {
+		coin = "BTC"
+	}
+
 	priceSeries := chart.TimeSeries{
 		Name: coin + " 4H",
 		Style: chart.Style{
